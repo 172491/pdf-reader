@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卡片阅读 · PDF</title>
+    <style>
+        :root {
+            --bg: #f0f2f5;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --text-secondary: #666666;
+            --shadow: 0 2px 8px rgba(0,0,0,0.08);
+            --primary: #4a90d9;
+            --header-bg: #ffffff;
+        }
+        [data-theme="dark"] {
+            --bg: #181a1b;
+            --card-bg: #242628;
+            --text: #e8e6e3;
+            --text-secondary: #b0aba6;
+            --shadow: 0 2px 8px rgba(0,0,0,0.4);
+            --header-bg: #1e2022;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.3s, color 0.3s;
+            min-height: 100vh;
+        }
+        .app-header {
+            position: sticky; top: 0; z-index: 10;
+            background: var(--header-bg);
+            box-shadow: var(--shadow);
+            padding: 12px 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 10px;
+        }
+        .app-title { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .btn {
+            padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer;
+            font-size: 0.95rem; font-weight: 500; background: var(--primary); color: #fff;
+            transition: background 0.2s, opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn-outline {
+            background: transparent; color: var(--text); border: 1px solid var(--text-secondary);
+        }
+        .btn-sm { padding: 4px 10px; font-size: 0.85rem; }
+        .theme-toggle {
+            background: none; border: none; cursor: pointer; font-size: 1.5rem; line-height: 1;
+            color: var(--text); padding: 4px;
+        }
+        .container { max-width: 750px; margin: 0 auto; padding: 20px 16px 40px; }
+        .drop-zone {
+            border: 2px dashed var(--text-secondary); border-radius: 16px;
+            padding: 60px 20px; text-align: center; color: var(--text-secondary);
+            transition: background 0.2s, border-color 0.2s; cursor: pointer; margin: 20px 0;
+        }
+        .drop-zone.active { background: rgba(74,144,217,0.1); border-color: var(--primary); }
+        .card {
+            background: var(--card-bg); border-radius: 16px;
+            padding: 20px 24px; margin-bottom: 16px;
+            box-shadow: var(--shadow); transition: background 0.3s, box-shadow 0.3s;
+            line-height: 1.8;
+        }
+        .card .page-label {
+            display: inline-block; font-size: 0.8rem; color: var(--text-secondary);
+            background: var(--bg); padding: 2px 10px; border-radius: 20px; margin-bottom: 8px;
+        }
+        .card .text { white-space: pre-wrap; word-wrap: break-word; font-size: 1rem; }
+        .loading-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3); z-index: 100; justify-content: center; align-items: center;
+        }
+        .loading-box {
+            background: var(--card-bg); padding: 30px 40px; border-radius: 16px;
+            text-align: center; box-shadow: var(--shadow);
+        }
+        .progress-bar {
+            width: 250px; height: 8px; background: #ddd; border-radius: 4px;
+            margin: 16px 0; overflow: hidden;
+        }
+        .progress-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.3s; }
+        .footer-note { text-align: center; color: var(--text-secondary); font-size: 0.85rem; margin-top: 40px; }
+        @media (max-width: 600px) {
+            .container { padding: 12px 8px; }
+            .card { padding: 16px; border-radius: 12px; margin-bottom: 12px; }
+            .app-header { padding: 10px 12px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <span class="app-title">📇 卡片阅读</span>
+        <div class="header-actions">
+            <button class="btn-outline btn-sm" id="fontDown" title="缩小字体">A-</button>
+            <button class="btn-outline btn-sm" id="fontUp" title="放大字体">A+</button>
+            <button class="btn" id="uploadBtn">📂 导入PDF</button>
+            <button class="theme-toggle" id="themeToggle" title="切换夜间模式">🌙</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="drop-zone" id="dropZone">
+            <p style="font-size:1.2rem">点击此处或拖拽PDF文件</p>
+            <p style="font-size:0.9rem">支持手机和电脑 · 完全本地解析</p>
+        </div>
+        <div class="cards-container" id="cardsContainer"></div>
+        <div class="footer-note" id="footerNote"></div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-box">
+            <p>正在解析PDF...</p>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+            <p id="progressText">0%</p>
+        </div>
+    </div>
+
+    <input type="file" id="fileInput" accept=".pdf" style="display:none">
+
+    <!-- 使用 PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+            onerror="alert('PDF解析库加载失败，请检查网络连接。')"></script>
+    <script>
+        // 禁用worker（在主线程解析，避免跨域问题）
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+        }
+
+        // ---------- DOM 元素 ----------
+        const uploadBtn = document.getElementById('uploadBtn');
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const cardsContainer = document.getElementById('cardsContainer');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const footerNote = document.getElementById('footerNote');
+        const themeToggle = document.getElementById('themeToggle');
+        const fontDown = document.getElementById('fontDown');
+        const fontUp = document.getElementById('fontUp');
+        const html = document.documentElement;
+
+        // ---------- 主题 ----------
+        const THEME_KEY = 'card-reader-theme';
+        const savedTheme = localStorage.getItem(THEME_KEY) || 'light';
+        html.setAttribute('data-theme', savedTheme);
+        themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+
+        themeToggle.addEventListener('click', () => {
+            const current = html.getAttribute('data-theme');
+            const newTheme = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+            localStorage.setItem(THEME_KEY, newTheme);
+        });
+
+        // ---------- 字体大小 ----------
+        const FONT_KEY = 'card-reader-font-size';
+        let currentFontSize = parseFloat(localStorage.getItem(FONT_KEY)) || 1;
+
+        function applyFontSize(size) {
+            document.querySelectorAll('.card .text').forEach(el => {
+                el.style.fontSize = size + 'rem';
+            });
+        }
+
+        fontDown.addEventListener('click', () => {
+            if (currentFontSize > 0.8) {
+                currentFontSize = Math.round((currentFontSize - 0.1) * 10) / 10;
+                applyFontSize(currentFontSize);
+                localStorage.setItem(FONT_KEY, currentFontSize);
+            }
+        });
+        fontUp.addEventListener('click', () => {
+            if (currentFontSize < 2.0) {
+                currentFontSize = Math.round((currentFontSize + 0.1) * 10) / 10;
+                applyFontSize(currentFontSize);
+                localStorage.setItem(FONT_KEY, currentFontSize);
+            }
+        });
+
+        // ---------- 文件选择 ----------
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFile(e.target.files[0]);
+        });
+
+        // ---------- 拖拽上传 ----------
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('active');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('active');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('active');
+            if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+        });
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // ---------- 核心处理 ----------
+        async function handleFile(file) {
+            if (file.type !== 'application/pdf') {
+                alert('请选择PDF文件');
+                return;
+            }
+            if (typeof pdfjsLib === 'undefined') {
+                alert('PDF解析库加载失败，请检查网络连接。');
+                return;
+            }
+
+            // 显示加载中
+            loadingOverlay.style.display = 'flex';
+            progressFill.style.width = '0%';
+            progressText.textContent = '0%';
+            cardsContainer.innerHTML = '';
+            footerNote.textContent = '';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
+                const totalPages = pdf.numPages;
+                const allParagraphs = []; // { text, pageNumber }
+
+                for (let i = 1; i <= totalPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 1 });
+                    const pageHeight = viewport.height;
+                    const textContent = await page.getTextContent();
+
+                    // 只保留有字符串的项
+                    const items = textContent.items.filter(item => item.str != null);
+                    if (items.length === 0) continue;
+
+                    // 1. 按行分组
+                    const { lines, avgHeight } = groupIntoLines(items, pageHeight);
+
+                    // 2. 过滤页眉页脚（顶部8%和底部8%）
+                    const filteredLines = lines.filter(line => {
+                        return line.top > pageHeight * 0.08 && line.top < pageHeight * 0.92;
+                    });
+
+                    // 3. 分段
+                    const rawParagraphs = segmentLines(filteredLines, avgHeight);
+
+                    // 4. 用空行再切分一次
+                    for (const raw of rawParagraphs) {
+                        const parts = splitByEmptyLines(raw);
+                        for (const part of parts) {
+                            if (part.trim()) {
+                                allParagraphs.push({ text: part, pageNumber: i });
+                            }
+                        }
+                    }
+
+                    // 更新进度
+                    const percent = Math.round((i / totalPages) * 100);
+                    progressFill.style.width = percent + '%';
+                    progressText.textContent = `第 ${i}/${totalPages} 页 (${percent}%)`;
+                }
+
+                if (allParagraphs.length === 0) {
+                    cardsContainer.innerHTML =
+                        '<p style="text-align:center; color: var(--text-secondary); padding: 40px;">该PDF没有可提取的文本，可能是扫描件或图片。</p>';
+                    footerNote.textContent = '';
+                } else {
+                    renderCards(allParagraphs);
+                    footerNote.textContent = `共 ${allParagraphs.length} 个段落，来自 ${totalPages} 页`;
+                }
+            } catch (error) {
+                console.error(error);
+                cardsContainer.innerHTML = `<p style="color:red; text-align:center;">解析出错: ${error.message}</p>`;
+            } finally {
+                loadingOverlay.style.display = 'none';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        // 将文本项按坐标分组为行
+        function groupIntoLines(items, pageHeight) {
+            const mapped = items.map(item => ({
+                str: item.str,
+                x: item.transform[4],
+                top: pageHeight - item.transform[5],   // 从上到下递增
+                height: item.height,
+                width: item.width
+            }));
+
+            // 排序：先按top，再按x
+            mapped.sort((a, b) => {
+                if (Math.abs(a.top - b.top) > 2) return a.top - b.top;
+                return a.x - b.x;
+            });
+
+            const heights = mapped.map(i => i.height).filter(h => h > 0);
+            const avgHeight = heights.length ? heights.reduce((s, h) => s + h, 0) / heights.length : 12;
+            const tolerance = avgHeight * 0.5;
+
+            const rawLines = [];
+            let currentLine = [];
+            let currentTop = null;
+
+            for (const item of mapped) {
+                if (currentLine.length === 0) {
+                    currentLine.push(item);
+                    currentTop = item.top;
+                } else {
+                    if (Math.abs(item.top - currentTop) <= tolerance) {
+                        currentLine.push(item);
+                    } else {
+                        rawLines.push({ items: currentLine, top: currentTop });
+                        currentLine = [item];
+                        currentTop = item.top;
+                    }
+                }
+            }
+            if (currentLine.length > 0) rawLines.push({ items: currentLine, top: currentTop });
+
+            // 每行内按x排序，拼接字符串
+            const lines = rawLines.map(line => {
+                line.items.sort((a, b) => a.x - b.x);
+                const text = line.items.map(it => it.str).join('');
+                const startX = line.items[0].x;
+                return { text, top: line.top, startX };
+            });
+
+            return { lines, avgHeight };
+        }
+
+        // 基于行间距与缩进分段
+        function segmentLines(lines, avgHeight) {
+            if (lines.length === 0) return [];
+            if (lines.length === 1) return [lines[0].text];
+
+            const startXs = lines.map(l => l.startX).sort((a, b) => a - b);
+            const medianStartX = startXs[Math.floor(startXs.length / 2)];
+            const indentThreshold = avgHeight * 2;   // 缩进阈值
+
+            const gaps = [];
+            for (let i = 0; i < lines.length - 1; i++) {
+                gaps.push(lines[i + 1].top - lines[i].top);
+            }
+            const sortedGaps = [...gaps].sort((a, b) => a - b);
+            const medianGap = sortedGaps[Math.floor(sortedGaps.length / 2)];
+            const gapThreshold = medianGap * 1.8;
+
+            const paragraphs = [];
+            let currentPara = [lines[0].text];
+
+            for (let i = 0; i < gaps.length; i++) {
+                const nextLine = lines[i + 1];
+                const gap = gaps[i];
+                const gapBreak = gap > gapThreshold;
+                const indentBreak = (nextLine.startX - medianStartX) > indentThreshold;
+
+                if (gapBreak || indentBreak) {
+                    paragraphs.push(currentPara.join('\n'));
+                    currentPara = [nextLine.text];
+                } else {
+                    currentPara.push(nextLine.text);
+                }
+            }
+            paragraphs.push(currentPara.join('\n'));
+            return paragraphs;
+        }
+
+        // 按空行二次切分
+        function splitByEmptyLines(text) {
+            return text.split(/\n\s*\n/).filter(s => s.trim() !== '');
+        }
+
+        // 渲染卡片
+        function renderCards(paragraphs) {
+            cardsContainer.innerHTML = '';
+            for (const p of paragraphs) {
+                const card = document.createElement('div');
+                card.className = 'card';
+
+                const label = document.createElement('span');
+                label.className = 'page-label';
+                label.textContent = `第 ${p.pageNumber} 页`;
+
+                const textDiv = document.createElement('div');
+                textDiv.className = 'text';
+                textDiv.textContent = p.text;
+
+                card.appendChild(label);
+                card.appendChild(textDiv);
+                cardsContainer.appendChild(card);
+            }
+            applyFontSize(currentFontSize);
+        }
+    </script>
+</body>
+</html>
