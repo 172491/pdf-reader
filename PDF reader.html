@@ -2,8 +2,8 @@
 <html lang="zh-CN" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>卡片阅读 · PDF</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>卡片阅读 · 学术文献</title>
     <style>
         :root {
             --bg: #f0f2f5;
@@ -13,6 +13,9 @@
             --shadow: 0 2px 8px rgba(0,0,0,0.08);
             --primary: #4a90d9;
             --header-bg: #ffffff;
+            --like: #27ae60;
+            --dislike: #e74c3c;
+            --neutral: #95a5a6;
         }
         [data-theme="dark"] {
             --bg: #181a1b;
@@ -29,49 +32,176 @@
             color: var(--text);
             transition: background 0.3s, color 0.3s;
             min-height: 100vh;
+            overflow-x: hidden;
         }
         .app-header {
-            position: sticky; top: 0; z-index: 10;
+            position: sticky; top: 0; z-index: 20;
             background: var(--header-bg);
             box-shadow: var(--shadow);
-            padding: 12px 20px;
+            padding: 10px 16px;
             display: flex; align-items: center; justify-content: space-between;
-            flex-wrap: wrap; gap: 10px;
+            flex-wrap: wrap; gap: 8px;
         }
-        .app-title { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+        .app-title { font-size: 1.4rem; font-weight: 700; color: var(--primary); }
         .header-actions { display: flex; gap: 8px; align-items: center; }
         .btn {
-            padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer;
-            font-size: 0.95rem; font-weight: 500; background: var(--primary); color: #fff;
-            transition: background 0.2s, opacity 0.2s;
+            padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer;
+            font-size: 0.9rem; font-weight: 500; background: var(--primary); color: #fff;
+            transition: background 0.2s, opacity 0.2s; white-space: nowrap;
         }
         .btn:hover { opacity: 0.9; }
         .btn-outline {
             background: transparent; color: var(--text); border: 1px solid var(--text-secondary);
         }
-        .btn-sm { padding: 4px 10px; font-size: 0.85rem; }
+        .btn-sm { padding: 4px 10px; font-size: 0.8rem; }
         .theme-toggle {
             background: none; border: none; cursor: pointer; font-size: 1.5rem; line-height: 1;
             color: var(--text); padding: 4px;
         }
-        .container { max-width: 750px; margin: 0 auto; padding: 20px 16px 40px; }
+        .container {
+            max-width: 750px; margin: 0 auto; padding: 20px 16px 40px;
+        }
         .drop-zone {
             border: 2px dashed var(--text-secondary); border-radius: 16px;
             padding: 60px 20px; text-align: center; color: var(--text-secondary);
-            transition: background 0.2s, border-color 0.2s; cursor: pointer; margin: 20px 0;
+            transition: background 0.2s, border-color 0.2s; cursor: pointer; width: 100%;
         }
         .drop-zone.active { background: rgba(74,144,217,0.1); border-color: var(--primary); }
-        .card {
-            background: var(--card-bg); border-radius: 16px;
-            padding: 20px 24px; margin-bottom: 16px;
-            box-shadow: var(--shadow); transition: background 0.3s, box-shadow 0.3s;
-            line-height: 1.8;
+
+        /* 阅读视图 */
+        .reader-container { display: none; flex-direction: column; height: 100vh; }
+        .top-bar {
+            padding: 8px 16px; background: var(--header-bg); box-shadow: var(--shadow);
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
         }
-        .card .page-label {
+        .progress-info {
+            display: flex; align-items: center; gap: 8px; flex: 1; min-width: 120px;
+        }
+        .progress-bar {
+            flex: 1; height: 6px; background: #ddd; border-radius: 3px; overflow: hidden;
+        }
+        .progress-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.3s; }
+        .jump-icon { cursor: pointer; font-size: 1.2rem; color: var(--text-secondary); }
+        .jump-input { width: 60px; padding: 4px; border: 1px solid var(--text-secondary); border-radius: 6px; text-align: center; }
+
+        .card-view {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px; position: relative;
+        }
+        .card-single {
+            width: 100%; max-width: 650px; height: 70vh; max-height: 600px;
+            background: var(--card-bg); border-radius: 20px; padding: 20px;
+            box-shadow: var(--shadow);
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            transition: background 0.3s, box-shadow 0.3s;
+            user-select: text;
+        }
+        .card-source {
             display: inline-block; font-size: 0.8rem; color: var(--text-secondary);
-            background: var(--bg); padding: 2px 10px; border-radius: 20px; margin-bottom: 8px;
+            background: var(--bg); padding: 2px 10px; border-radius: 20px; margin-bottom: 12px;
+            align-self: flex-start;
         }
-        .card .text { white-space: pre-wrap; word-wrap: break-word; font-size: 1rem; }
+        .card-body {
+            flex: 1; overflow-y: auto; padding: 4px 0; line-height: 1.6; font-size: 1rem;
+            word-wrap: break-word;
+        }
+        .card-body::-webkit-scrollbar { width: 4px; }
+        .card-body::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+        mark { border-radius: 2px; padding: 0 2px; }
+        mark.highlight-yellow { background-color: #fef08a; }
+        mark.highlight-green { background-color: #bbf7d0; }
+        mark.highlight-blue { background-color: #bfdbfe; }
+        mark.highlight-pink { background-color: #fbcfe8; }
+        .note-icon {
+            font-size: 0.8rem; cursor: pointer; color: var(--primary); margin-left: 2px;
+        }
+        .floating-toolbar {
+            position: fixed; z-index: 100; display: none;
+            background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            padding: 6px 10px; gap: 6px; flex-wrap: wrap; pointer-events: auto;
+        }
+        .floating-toolbar button, .color-dot {
+            background: none; border: none; font-size: 1rem; cursor: pointer;
+            padding: 4px 8px; border-radius: 6px; color: var(--text);
+        }
+        .floating-toolbar button:hover { background: var(--bg); }
+        .color-dot {
+            width: 20px; height: 20px; border-radius: 50%; border: 1px solid #ccc;
+        }
+        .nav-buttons {
+            display: flex; justify-content: center; gap: 30px; margin-top: 16px;
+        }
+        .nav-btn {
+            width: 48px; height: 48px; border-radius: 50%; border: none;
+            font-size: 1.8rem; cursor: pointer; background: var(--card-bg);
+            box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center;
+            color: var(--text);
+        }
+        .tag-area {
+            display: flex; justify-content: center; gap: 15px; margin-top: 12px;
+        }
+        .tag-btn {
+            background: none; border: 1px solid var(--text-secondary); border-radius: 20px;
+            padding: 4px 12px; cursor: pointer; font-size: 1rem;
+            display: flex; align-items: center; gap: 4px; color: var(--text);
+            transition: background 0.2s;
+        }
+        .tag-btn.active {
+            background: var(--primary); color: #fff; border-color: var(--primary);
+        }
+
+        /* 浏览模式 */
+        .browse-list {
+            display: none; flex-direction: column; gap: 8px; padding: 10px 0;
+        }
+        .browse-item {
+            background: var(--card-bg); border-radius: 12px; padding: 12px;
+            box-shadow: var(--shadow); cursor: pointer; transition: background 0.2s;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .browse-item:hover { filter: brightness(0.95); }
+        .browse-item .source { font-size: 0.8rem; color: var(--text-secondary); }
+        .browse-item .preview { font-size: 0.9rem; color: var(--text); }
+        .browse-item .tags { font-size: 0.9rem; }
+        .search-bar {
+            display: flex; gap: 8px; margin-bottom: 10px;
+        }
+        .search-bar input {
+            flex: 1; padding: 8px; border: 1px solid var(--text-secondary);
+            border-radius: 8px; background: var(--card-bg); color: var(--text);
+        }
+        .nav-match { display: flex; gap: 5px; align-items: center; }
+
+        /* 标签面板 (半屏) */
+        .panel-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4);
+            z-index: 200; display: none; justify-content: center; align-items: flex-end;
+        }
+        .panel-sheet {
+            width: 100%; max-height: 70%; background: var(--card-bg);
+            border-radius: 20px 20px 0 0; padding: 20px; overflow-y: auto;
+            box-shadow: 0 -4px 16px rgba(0,0,0,0.2);
+        }
+        .panel-header { display: flex; justify-content: space-between; margin-bottom: 16px; }
+        .panel-tag-filters { display: flex; gap: 8px; margin-bottom: 16px; }
+        .panel-item {
+            padding: 10px; border-bottom: 1px solid var(--bg); cursor: pointer;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .panel-item:hover { background: var(--bg); }
+
+        /* 设置面板 */
+        .settings-panel {
+            position: fixed; top: 0; right: 0; width: 280px; height: 100%;
+            background: var(--card-bg); z-index: 300; box-shadow: -2px 0 12px rgba(0,0,0,0.2);
+            transform: translateX(100%); transition: transform 0.3s; padding: 20px;
+            display: flex; flex-direction: column; gap: 20px;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .slider-container { display: flex; flex-direction: column; gap: 8px; }
+        .slider-container label { font-size: 0.9rem; }
+
         .loading-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.3); z-index: 100; justify-content: center; align-items: center;
@@ -80,16 +210,9 @@
             background: var(--card-bg); padding: 30px 40px; border-radius: 16px;
             text-align: center; box-shadow: var(--shadow);
         }
-        .progress-bar {
-            width: 250px; height: 8px; background: #ddd; border-radius: 4px;
-            margin: 16px 0; overflow: hidden;
-        }
-        .progress-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.3s; }
-        .footer-note { text-align: center; color: var(--text-secondary); font-size: 0.85rem; margin-top: 40px; }
         @media (max-width: 600px) {
-            .container { padding: 12px 8px; }
-            .card { padding: 16px; border-radius: 12px; margin-bottom: 12px; }
-            .app-header { padding: 10px 12px; }
+            .card-single { height: 60vh; max-height: 500px; padding: 14px; }
+            .nav-btn { width: 40px; height: 40px; font-size: 1.5rem; }
         }
     </style>
 </head>
@@ -97,306 +220,860 @@
     <header class="app-header">
         <span class="app-title">📇 卡片阅读</span>
         <div class="header-actions">
-            <button class="btn-outline btn-sm" id="fontDown" title="缩小字体">A-</button>
-            <button class="btn-outline btn-sm" id="fontUp" title="放大字体">A+</button>
-            <button class="btn" id="uploadBtn">📂 导入PDF</button>
+            <button class="btn-outline btn-sm" id="btnSettings">Aa</button>
+            <button class="btn" id="uploadBtn">📂 导入</button>
             <button class="theme-toggle" id="themeToggle" title="切换夜间模式">🌙</button>
         </div>
     </header>
 
-    <div class="container">
+    <div class="container" id="mainContainer">
         <div class="drop-zone" id="dropZone">
-            <p style="font-size:1.2rem">点击此处或拖拽PDF文件</p>
-            <p style="font-size:0.9rem">支持手机和电脑 · 完全本地解析</p>
+            <p style="font-size:1.2rem">点击此处或拖拽文件</p>
+            <p style="font-size:0.9rem">支持 PDF 和 EPUB · 完全本地解析</p>
         </div>
-        <div class="cards-container" id="cardsContainer"></div>
-        <div class="footer-note" id="footerNote"></div>
+
+        <!-- 阅读视图 -->
+        <div class="reader-container" id="readerView">
+            <!-- 顶部进度条 + 跳转 -->
+            <div class="top-bar">
+                <div class="progress-info">
+                    <span id="pageIndicator">0 / 0</span>
+                    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <span class="jump-icon" id="jumpIcon" title="跳转到段落">🔽</span>
+                <input type="number" class="jump-input" id="jumpInput" min="1" style="display:none;" placeholder="段落号">
+                <button class="btn-sm btn-outline" id="modeSwitch">📋 浏览</button>
+                <button class="btn-sm btn-outline" id="exportMD">📝 导出MD</button>
+                <button class="btn-sm btn-outline" id="exportData">📤 导出标记</button>
+                <button class="btn-sm btn-outline" id="importDataBtn">📥 导入标记</button>
+                <input type="file" id="importDataInput" accept=".json" style="display:none;">
+            </div>
+
+            <!-- 卡片视图 -->
+            <div class="card-view" id="cardView">
+                <div class="card-single" id="cardSingle">
+                    <span class="card-source" id="cardSource"></span>
+                    <div class="card-body" id="cardBody"></div>
+                </div>
+            </div>
+
+            <!-- 浏览列表 -->
+            <div class="browse-list" id="browseList">
+                <div class="search-bar">
+                    <input type="text" id="searchInput" placeholder="输入关键词检索段落...">
+                    <button class="btn-sm btn-outline" id="clearSearch">清除</button>
+                    <div class="nav-match">
+                        <button class="btn-sm btn-outline" id="prevMatch">◀</button>
+                        <span id="matchInfo"></span>
+                        <button class="btn-sm btn-outline" id="nextMatch">▶</button>
+                    </div>
+                </div>
+                <div id="browseItems"></div>
+            </div>
+
+            <!-- 导航与标签 -->
+            <div class="nav-buttons">
+                <button class="nav-btn" id="prevCard">◀</button>
+                <button class="nav-btn" id="nextCard">▶</button>
+            </div>
+            <div class="tag-area">
+                <button class="tag-btn" data-tag="question">❓ 疑问</button>
+                <button class="tag-btn" data-tag="inspiration">💡 灵感</button>
+                <button class="tag-btn" data-tag="quote">📌 引用</button>
+                <button class="btn-sm btn-outline" id="showTagsPanel">📂 所有标记</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 标签面板 -->
+    <div class="panel-overlay" id="tagPanelOverlay">
+        <div class="panel-sheet" id="tagPanelSheet">
+            <div class="panel-header">
+                <h3>标记管理</h3>
+                <button class="btn-sm btn-outline" id="closeTagPanel">✕</button>
+            </div>
+            <div class="panel-tag-filters">
+                <button class="btn-sm tag-filter active" data-filter="all">全部</button>
+                <button class="btn-sm tag-filter" data-filter="question">❓ 疑问</button>
+                <button class="btn-sm tag-filter" data-filter="inspiration">💡 灵感</button>
+                <button class="btn-sm tag-filter" data-filter="quote">📌 引用</button>
+            </div>
+            <div id="tagPanelContent"></div>
+        </div>
+    </div>
+
+    <!-- 设置面板 (Aa) -->
+    <div class="settings-panel" id="settingsPanel">
+        <div style="display:flex; justify-content:space-between;">
+            <h3>显示设置</h3>
+            <button class="btn-sm btn-outline" id="closeSettings">✕</button>
+        </div>
+        <div class="slider-container">
+            <label>字体大小 <span id="fontSizeValue">16px</span></label>
+            <input type="range" id="fontSizeSlider" min="14" max="28" value="16" step="1">
+        </div>
+        <div class="slider-container">
+            <label>行间距 <span id="lineHeightValue">1.6</span></label>
+            <input type="range" id="lineHeightSlider" min="1.4" max="2.5" value="1.6" step="0.1">
+        </div>
     </div>
 
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-box">
-            <p>正在解析PDF...</p>
-            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-            <p id="progressText">0%</p>
+            <p id="loadingMsg">正在解析文件...</p>
+            <div class="progress-bar"><div class="progress-fill" id="loadingProgressFill"></div></div>
+            <p id="loadingProgressText">0%</p>
         </div>
     </div>
 
-    <input type="file" id="fileInput" accept=".pdf" style="display:none">
+    <input type="file" id="fileInput" accept=".pdf,.epub" style="display:none">
 
-    <!-- 使用 PDF.js CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
-            onerror="alert('PDF解析库加载失败，请检查网络连接。')"></script>
     <script>
-        // 禁用worker（在主线程解析，避免跨域问题）
-        if (typeof pdfjsLib !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-        }
-
-        // ---------- DOM 元素 ----------
-        const uploadBtn = document.getElementById('uploadBtn');
-        const fileInput = document.getElementById('fileInput');
-        const dropZone = document.getElementById('dropZone');
-        const cardsContainer = document.getElementById('cardsContainer');
-        const loadingOverlay = document.getElementById('loadingOverlay');
-        const progressFill = document.getElementById('progressFill');
-        const progressText = document.getElementById('progressText');
-        const footerNote = document.getElementById('footerNote');
-        const themeToggle = document.getElementById('themeToggle');
-        const fontDown = document.getElementById('fontDown');
-        const fontUp = document.getElementById('fontUp');
-        const html = document.documentElement;
-
-        // ---------- 主题 ----------
-        const THEME_KEY = 'card-reader-theme';
-        const savedTheme = localStorage.getItem(THEME_KEY) || 'light';
-        html.setAttribute('data-theme', savedTheme);
-        themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
-
-        themeToggle.addEventListener('click', () => {
-            const current = html.getAttribute('data-theme');
-            const newTheme = current === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', newTheme);
-            themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
-            localStorage.setItem(THEME_KEY, newTheme);
-        });
-
-        // ---------- 字体大小 ----------
-        const FONT_KEY = 'card-reader-font-size';
-        let currentFontSize = parseFloat(localStorage.getItem(FONT_KEY)) || 1;
-
-        function applyFontSize(size) {
-            document.querySelectorAll('.card .text').forEach(el => {
-                el.style.fontSize = size + 'rem';
-            });
-        }
-
-        fontDown.addEventListener('click', () => {
-            if (currentFontSize > 0.8) {
-                currentFontSize = Math.round((currentFontSize - 0.1) * 10) / 10;
-                applyFontSize(currentFontSize);
-                localStorage.setItem(FONT_KEY, currentFontSize);
+        // ========== 动态加载库 ==========
+        (function loadLibraries() {
+            const pdfJsCDNs = [
+                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+                'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js',
+                'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js'
+            ];
+            const jszipCDNs = [
+                'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+                'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js',
+                'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'
+            ];
+            let pdfLoaded = false, jszipLoaded = false;
+            function loadScript(url, resolve) {
+                const script = document.createElement('script');
+                script.src = url;
+                script.onload = () => resolve(true);
+                script.onerror = () => resolve(false);
+                document.head.appendChild(script);
             }
-        });
-        fontUp.addEventListener('click', () => {
-            if (currentFontSize < 2.0) {
-                currentFontSize = Math.round((currentFontSize + 0.1) * 10) / 10;
-                applyFontSize(currentFontSize);
-                localStorage.setItem(FONT_KEY, currentFontSize);
-            }
-        });
-
-        // ---------- 文件选择 ----------
-        uploadBtn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) handleFile(e.target.files[0]);
-        });
-
-        // ---------- 拖拽上传 ----------
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('active');
-        });
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('active');
-        });
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('active');
-            if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
-        });
-        dropZone.addEventListener('click', () => fileInput.click());
-
-        // ---------- 核心处理 ----------
-        async function handleFile(file) {
-            if (file.type !== 'application/pdf') {
-                alert('请选择PDF文件');
-                return;
-            }
-            if (typeof pdfjsLib === 'undefined') {
-                alert('PDF解析库加载失败，请检查网络连接。');
-                return;
-            }
-
-            // 显示加载中
-            loadingOverlay.style.display = 'flex';
-            progressFill.style.width = '0%';
-            progressText.textContent = '0%';
-            cardsContainer.innerHTML = '';
-            footerNote.textContent = '';
-
-            try {
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
-                const totalPages = pdf.numPages;
-                const allParagraphs = []; // { text, pageNumber }
-
-                for (let i = 1; i <= totalPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const viewport = page.getViewport({ scale: 1 });
-                    const pageHeight = viewport.height;
-                    const textContent = await page.getTextContent();
-
-                    // 只保留有字符串的项
-                    const items = textContent.items.filter(item => item.str != null);
-                    if (items.length === 0) continue;
-
-                    // 1. 按行分组
-                    const { lines, avgHeight } = groupIntoLines(items, pageHeight);
-
-                    // 2. 过滤页眉页脚（顶部8%和底部8%）
-                    const filteredLines = lines.filter(line => {
-                        return line.top > pageHeight * 0.08 && line.top < pageHeight * 0.92;
+            function tryLoad(list, callback) {
+                let idx = 0;
+                function next() {
+                    if (idx >= list.length) { callback(false); return; }
+                    loadScript(list[idx], success => {
+                        if (success) callback(true);
+                        else { idx++; next(); }
                     });
+                }
+                next();
+            }
+            tryLoad(pdfJsCDNs, ok => {
+                if (ok && typeof pdfjsLib !== 'undefined') pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+                pdfLoaded = true; check();
+            });
+            tryLoad(jszipCDNs, ok => { jszipLoaded = true; check(); });
+            function check() { if (pdfLoaded && jszipLoaded) startApp(); }
+        })();
 
-                    // 3. 分段
-                    const rawParagraphs = segmentLines(filteredLines, avgHeight);
+        // ========== 主程序 ==========
+        function startApp() {
+            // DOM 引用
+            const dropZone = document.getElementById('dropZone');
+            const readerView = document.getElementById('readerView');
+            const cardSingle = document.getElementById('cardSingle');
+            const cardSource = document.getElementById('cardSource');
+            const cardBody = document.getElementById('cardBody');
+            const pageIndicator = document.getElementById('pageIndicator');
+            const progressFill = document.getElementById('progressFill');
+            const progressPercent = document.getElementById('progressPercent');
+            const jumpIcon = document.getElementById('jumpIcon');
+            const jumpInput = document.getElementById('jumpInput');
+            const modeSwitch = document.getElementById('modeSwitch');
+            const browseList = document.getElementById('browseList');
+            const browseItems = document.getElementById('browseItems');
+            const searchInput = document.getElementById('searchInput');
+            const clearSearch = document.getElementById('clearSearch');
+            const prevMatch = document.getElementById('prevMatch');
+            const nextMatch = document.getElementById('nextMatch');
+            const matchInfo = document.getElementById('matchInfo');
+            const prevCard = document.getElementById('prevCard');
+            const nextCard = document.getElementById('nextCard');
+            const tagBtns = document.querySelectorAll('.tag-btn');
+            const showTagsPanel = document.getElementById('showTagsPanel');
+            const tagPanelOverlay = document.getElementById('tagPanelOverlay');
+            const tagPanelContent = document.getElementById('tagPanelContent');
+            const closeTagPanel = document.getElementById('closeTagPanel');
+            const tagFilters = document.querySelectorAll('.tag-filter');
+            const settingsPanel = document.getElementById('settingsPanel');
+            const btnSettings = document.getElementById('btnSettings');
+            const closeSettings = document.getElementById('closeSettings');
+            const fontSizeSlider = document.getElementById('fontSizeSlider');
+            const fontSizeValue = document.getElementById('fontSizeValue');
+            const lineHeightSlider = document.getElementById('lineHeightSlider');
+            const lineHeightValue = document.getElementById('lineHeightValue');
+            const themeToggle = document.getElementById('themeToggle');
+            const html = document.documentElement;
+            const uploadBtn = document.getElementById('uploadBtn');
+            const fileInput = document.getElementById('fileInput');
+            const exportMD = document.getElementById('exportMD');
+            const exportData = document.getElementById('exportData');
+            const importDataBtn = document.getElementById('importDataBtn');
+            const importDataInput = document.getElementById('importDataInput');
+            const loadingOverlay = document.getElementById('loadingOverlay');
 
-                    // 4. 用空行再切分一次
-                    for (const raw of rawParagraphs) {
-                        const parts = splitByEmptyLines(raw);
-                        for (const part of parts) {
-                            if (part.trim()) {
-                                allParagraphs.push({ text: part, pageNumber: i });
+            // 状态
+            let cards = [];               // { text, source, highlights, tag }
+            let currentIndex = 0;
+            let currentMode = 'card';    // 'card' or 'browse'
+            let searchKeyword = '';
+            let matchIndexes = [];
+            let currentMatchIdx = -1;
+            let currentFileName = '';
+
+            // 主题
+            const THEME_KEY = 'reader-theme';
+            let savedTheme = localStorage.getItem(THEME_KEY) || 'light';
+            html.setAttribute('data-theme', savedTheme);
+            themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+            themeToggle.addEventListener('click', () => {
+                const cur = html.getAttribute('data-theme');
+                const next = cur === 'dark' ? 'light' : 'dark';
+                html.setAttribute('data-theme', next);
+                themeToggle.textContent = next === 'dark' ? '☀️' : '🌙';
+                localStorage.setItem(THEME_KEY, next);
+            });
+
+            // 设置面板
+            let fontSize = parseInt(localStorage.getItem('reader-font-size')) || 16;
+            let lineHeight = parseFloat(localStorage.getItem('reader-line-height')) || 1.6;
+            fontSizeSlider.value = fontSize;
+            lineHeightSlider.value = lineHeight;
+            fontSizeValue.textContent = fontSize + 'px';
+            lineHeightValue.textContent = lineHeight;
+            applyTypography();
+
+            function applyTypography() {
+                cardBody.style.fontSize = fontSize + 'px';
+                cardBody.style.lineHeight = lineHeight;
+                document.querySelectorAll('.browse-item .preview').forEach(el => {
+                    el.style.fontSize = (fontSize - 2) + 'px';
+                });
+            }
+            fontSizeSlider.addEventListener('input', () => {
+                fontSize = parseInt(fontSizeSlider.value);
+                fontSizeValue.textContent = fontSize + 'px';
+                applyTypography();
+                localStorage.setItem('reader-font-size', fontSize);
+            });
+            lineHeightSlider.addEventListener('input', () => {
+                lineHeight = parseFloat(lineHeightSlider.value);
+                lineHeightValue.textContent = lineHeight;
+                applyTypography();
+                localStorage.setItem('reader-line-height', lineHeight);
+            });
+            btnSettings.addEventListener('click', () => settingsPanel.classList.toggle('open'));
+            closeSettings.addEventListener('click', () => settingsPanel.classList.remove('open'));
+
+            // 文件上传
+            uploadBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', e => { if(e.target.files[0]) loadFile(e.target.files[0]); });
+            dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('active'); });
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('active'));
+            dropZone.addEventListener('drop', e => {
+                e.preventDefault(); dropZone.classList.remove('active');
+                if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+            });
+            dropZone.addEventListener('click', () => fileInput.click());
+
+            // 解析文件
+            async function loadFile(file) {
+                currentFileName = file.name.replace(/\.[^.]+$/, '');
+                const name = file.name.toLowerCase();
+                if (name.endsWith('.pdf')) {
+                    if (typeof pdfjsLib === 'undefined') { alert('PDF库加载失败'); return; }
+                    await parsePdf(file);
+                } else if (name.endsWith('.epub')) {
+                    if (typeof JSZip === 'undefined') { alert('EPUB库加载失败'); return; }
+                    await parseEpub(file);
+                } else { alert('请选择 PDF 或 EPUB'); return; }
+                // 尝试恢复进度
+                loadProgress();
+            }
+
+            // PDF解析
+            async function parsePdf(file) {
+                showLoading('解析PDF中...');
+                try {
+                    const buf = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: buf, disableWorker: true }).promise;
+                    const total = pdf.numPages;
+                    const paragraphs = [];
+                    for (let i=1; i<=total; i++) {
+                        const page = await pdf.getPage(i);
+                        const vp = page.getViewport({ scale:1 });
+                        const ph = vp.height;
+                        const tc = await page.getTextContent();
+                        const items = tc.items.filter(it => it.str != null);
+                        if (!items.length) continue;
+                        const { lines, avgHeight } = groupIntoLines(items, ph);
+                        const filtered = lines.filter(l => l.top > ph*0.08 && l.top < ph*0.92);
+                        const raws = segmentLines(filtered, avgHeight);
+                        for (const raw of raws) {
+                            const parts = splitByEmptyLines(raw);
+                            for (const part of parts) {
+                                if (part.trim()) paragraphs.push({ text: part, source: `第 ${i} 页` });
                             }
                         }
+                        updateLoading(i, total);
                     }
-
-                    // 更新进度
-                    const percent = Math.round((i / totalPages) * 100);
-                    progressFill.style.width = percent + '%';
-                    progressText.textContent = `第 ${i}/${totalPages} 页 (${percent}%)`;
-                }
-
-                if (allParagraphs.length === 0) {
-                    cardsContainer.innerHTML =
-                        '<p style="text-align:center; color: var(--text-secondary); padding: 40px;">该PDF没有可提取的文本，可能是扫描件或图片。</p>';
-                    footerNote.textContent = '';
-                } else {
-                    renderCards(allParagraphs);
-                    footerNote.textContent = `共 ${allParagraphs.length} 个段落，来自 ${totalPages} 页`;
-                }
-            } catch (error) {
-                console.error(error);
-                cardsContainer.innerHTML = `<p style="color:red; text-align:center;">解析出错: ${error.message}</p>`;
-            } finally {
-                loadingOverlay.style.display = 'none';
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                    finishParsing(paragraphs);
+                } catch(e) { alert('PDF解析失败: '+e.message); hideLoading(); }
             }
-        }
 
-        // 将文本项按坐标分组为行
-        function groupIntoLines(items, pageHeight) {
-            const mapped = items.map(item => ({
-                str: item.str,
-                x: item.transform[4],
-                top: pageHeight - item.transform[5],   // 从上到下递增
-                height: item.height,
-                width: item.width
-            }));
+            // EPUB解析
+            async function parseEpub(file) {
+                showLoading('解析EPUB中...');
+                try {
+                    const zip = await JSZip.loadAsync(file);
+                    const container = zip.file('META-INF/container.xml');
+                    if (!container) throw new Error('无效EPUB');
+                    const contXml = await container.async('text');
+                    const contDoc = new DOMParser().parseFromString(contXml, 'application/xml');
+                    const rootfile = contDoc.querySelector('rootfile');
+                    if (!rootfile) throw new Error('无rootfile');
+                    const opfPath = rootfile.getAttribute('full-path');
+                    const opfFile = zip.file(opfPath);
+                    if (!opfFile) throw new Error('找不到OPF');
+                    const opfXml = await opfFile.async('text');
+                    const opfDoc = new DOMParser().parseFromString(opfXml, 'application/xml');
+                    const items = opfDoc.querySelectorAll('manifest > item');
+                    const spineItems = opfDoc.querySelectorAll('spine > itemref');
+                    const idMap = {};
+                    items.forEach(it => { const id=it.getAttribute('id'), href=it.getAttribute('href'); if(id&&href) idMap[id]=href; });
+                    const base = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/')+1) : '';
+                    const paragraphs = [];
+                    let done = 0;
+                    const total = spineItems.length;
+                    for (const ref of spineItems) {
+                        const idref = ref.getAttribute('idref');
+                        if (!idref || !idMap[idref]) continue;
+                        let href = idMap[idref];
+                        const full = base + href;
+                        const chapterFile = zip.file(full);
+                        if (!chapterFile) continue;
+                        const htmlText = await chapterFile.async('text');
+                        const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+                        let title = doc.querySelector('title')?.textContent.trim() || doc.querySelector('h1')?.textContent.trim() || href.split('/').pop().replace(/\.[^.]+$/,'');
+                        const body = doc.querySelector('body');
+                        if (!body) continue;
+                        const pTags = body.querySelectorAll('p');
+                        if (pTags.length) {
+                            pTags.forEach(p => { const t = p.textContent.trim(); if(t) paragraphs.push({ text: t, source: title }); });
+                        } else {
+                            const fullText = body.textContent || '';
+                            fullText.split(/\n\s*\n/).forEach(p => { const t = p.trim(); if(t) paragraphs.push({ text: t, source: title }); });
+                        }
+                        done++;
+                        updateLoading(done, total);
+                    }
+                    finishParsing(paragraphs);
+                } catch(e) { alert('EPUB解析失败: '+e.message); hideLoading(); }
+            }
 
-            // 排序：先按top，再按x
-            mapped.sort((a, b) => {
-                if (Math.abs(a.top - b.top) > 2) return a.top - b.top;
-                return a.x - b.x;
+            // 辅助解析函数 (与之前相同)
+            function groupIntoLines(items, pageHeight) {
+                const mapped = items.map(it => ({ str: it.str, x: it.transform[4], top: pageHeight - it.transform[5], height: it.height, width: it.width }));
+                mapped.sort((a,b) => Math.abs(a.top-b.top)>2 ? a.top-b.top : a.x-b.x);
+                const heights = mapped.map(i=>i.height).filter(h=>h>0);
+                const avg = heights.length ? heights.reduce((s,h)=>s+h,0)/heights.length : 12;
+                const tol = avg*0.5;
+                const rawLines = []; let curLine=[], curTop=null;
+                for (const it of mapped) {
+                    if (!curLine.length) { curLine.push(it); curTop=it.top; }
+                    else if (Math.abs(it.top-curTop)<=tol) curLine.push(it);
+                    else { rawLines.push({items:curLine, top:curTop}); curLine=[it]; curTop=it.top; }
+                }
+                if (curLine.length) rawLines.push({items:curLine, top:curTop});
+                const lines = rawLines.map(l => { l.items.sort((a,b)=>a.x-b.x); return { text: l.items.map(i=>i.str).join(''), top: l.top, startX: l.items[0].x }; });
+                return { lines, avgHeight: avg };
+            }
+            function segmentLines(lines, avgH) {
+                if (lines.length<2) return lines.map(l=>l.text);
+                const startXs = lines.map(l=>l.startX).sort((a,b)=>a-b);
+                const medX = startXs[Math.floor(startXs.length/2)];
+                const indentTh = avgH*2;
+                const gaps = []; for (let i=0;i<lines.length-1;i++) gaps.push(lines[i+1].top - lines[i].top);
+                const sortedGaps = [...gaps].sort((a,b)=>a-b);
+                const medGap = sortedGaps[Math.floor(sortedGaps.length/2)];
+                const gapTh = medGap*1.8;
+                const paras = []; let cur = [lines[0].text];
+                for (let i=0;i<gaps.length;i++) {
+                    const next = lines[i+1];
+                    if (gaps[i] > gapTh || (next.startX - medX) > indentTh) { paras.push(cur.join('\n')); cur = [next.text]; }
+                    else cur.push(next.text);
+                }
+                paras.push(cur.join('\n')); return paras;
+            }
+            function splitByEmptyLines(t) { return t.split(/\n\s*\n/).filter(s=>s.trim()); }
+            function showLoading(msg) {
+                loadingOverlay.style.display = 'flex'; document.getElementById('loadingMsg').textContent = msg;
+                document.getElementById('loadingProgressFill').style.width = '0%';
+                document.getElementById('loadingProgressText').textContent = '0%';
+            }
+            function updateLoading(cur, total) {
+                const pct = Math.round((cur/total)*100);
+                document.getElementById('loadingProgressFill').style.width = pct+'%';
+                document.getElementById('loadingProgressText').textContent = `${cur}/${total}`;
+            }
+            function hideLoading() { loadingOverlay.style.display = 'none'; }
+
+            function finishParsing(paragraphs) {
+                hideLoading();
+                if (!paragraphs.length) { alert('未提取到文本'); return; }
+                cards = paragraphs.map(p => ({ text: p.text, source: p.source, highlights: [], tag: null }));
+                currentIndex = 0;
+                dropZone.style.display = 'none';
+                document.querySelector('.container').style.padding = '0';
+                readerView.style.display = 'flex';
+                // 初始化视图
+                showCardMode();
+                updateProgress();
+                renderCard();
+                renderBrowseList();
+                saveProgress();
+            }
+
+            // 进度保存与加载
+            function saveProgress() {
+                if (!cards.length) return;
+                const data = {
+                    fileName: currentFileName,
+                    cards: cards.map(c => ({ highlights: c.highlights, tag: c.tag })),
+                    currentIndex: currentIndex
+                };
+                localStorage.setItem('reader-data-' + currentFileName, JSON.stringify(data));
+            }
+            function loadProgress() {
+                const raw = localStorage.getItem('reader-data-' + currentFileName);
+                if (!raw) return;
+                try {
+                    const data = JSON.parse(raw);
+                    if (data.cards && data.cards.length === cards.length) {
+                        for (let i=0; i<cards.length; i++) {
+                            cards[i].highlights = data.cards[i].highlights || [];
+                            cards[i].tag = data.cards[i].tag || null;
+                        }
+                        currentIndex = data.currentIndex || 0;
+                        renderCard();
+                        renderBrowseList();
+                        updateProgress();
+                    }
+                } catch(e) {}
+            }
+
+            // 视图切换
+            modeSwitch.addEventListener('click', () => {
+                if (currentMode === 'card') {
+                    showBrowseMode();
+                } else {
+                    showCardMode();
+                }
+            });
+            function showCardMode() {
+                currentMode = 'card';
+                document.getElementById('cardView').style.display = 'flex';
+                browseList.style.display = 'none';
+                document.querySelector('.nav-buttons').style.display = 'flex';
+                document.querySelector('.tag-area').style.display = 'flex';
+                modeSwitch.textContent = '📋 浏览';
+                searchInput.value = '';
+                searchKeyword = '';
+                renderCard();
+            }
+            function showBrowseMode() {
+                currentMode = 'browse';
+                document.getElementById('cardView').style.display = 'none';
+                browseList.style.display = 'flex';
+                document.querySelector('.nav-buttons').style.display = 'none';
+                document.querySelector('.tag-area').style.display = 'none';
+                modeSwitch.textContent = '📇 卡片';
+                renderBrowseList();
+            }
+
+            // 卡片渲染
+            function renderCard() {
+                if (currentIndex >= cards.length) {
+                    cardSource.textContent = '';
+                    cardBody.innerHTML = '<p style="color:var(--text-secondary); text-align:center;">🎉 你已读完所有段落</p>';
+                    updateProgress();
+                    return;
+                }
+                const card = cards[currentIndex];
+                cardSource.textContent = card.source || '段落';
+                cardBody.innerHTML = buildHighlightedHTML(card);
+                updateTagButtons(card.tag);
+                updateProgress();
+                saveProgress();
+            }
+
+            function buildHighlightedHTML(card) {
+                let text = card.text;
+                if (!card.highlights.length) return escapeHtml(text);
+                const sorted = [...card.highlights].sort((a,b) => a.start - b.start);
+                let html = '';
+                let lastIdx = 0;
+                sorted.forEach((hl, i) => {
+                    if (hl.start < lastIdx) return;
+                    html += escapeHtml(text.slice(lastIdx, hl.start));
+                    const highlighted = text.slice(hl.start, hl.end);
+                    html += `<mark class="highlight-${hl.color || 'yellow'}" data-highlight-index="${i}">${escapeHtml(highlighted)}</mark>`;
+                    if (hl.note) {
+                        html += `<span class="note-icon" data-highlight-index="${i}">📝</span>`;
+                    }
+                    lastIdx = hl.end;
+                });
+                html += escapeHtml(text.slice(lastIdx));
+                return html;
+            }
+
+            function escapeHtml(str) {
+                return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            }
+
+            // 划线与笔记
+            document.addEventListener('mouseup', handleTextSelection);
+            document.addEventListener('touchend', handleTextSelection);
+            let currentSelectionRange = null;
+            const toolbar = document.createElement('div');
+            toolbar.className = 'floating-toolbar';
+            toolbar.innerHTML = `
+                <span class="color-dot" style="background:#fef08a" data-color="yellow"></span>
+                <span class="color-dot" style="background:#bbf7d0" data-color="green"></span>
+                <span class="color-dot" style="background:#bfdbfe" data-color="blue"></span>
+                <span class="color-dot" style="background:#fbcfe8" data-color="pink"></span>
+                <button id="toolHighlight">🖍️ 划线</button>
+                <button id="toolNote">📝 笔记</button>
+            `;
+            document.body.appendChild(toolbar);
+            let selectedColor = 'yellow';
+            toolbar.querySelectorAll('.color-dot').forEach(dot => {
+                dot.addEventListener('click', function() {
+                    selectedColor = this.dataset.color;
+                    toolbar.querySelectorAll('.color-dot').forEach(d => d.style.border = '1px solid #ccc');
+                    this.style.border = '2px solid var(--primary)';
+                });
+            });
+            document.getElementById('toolHighlight').addEventListener('click', () => applyHighlight(selectedColor, ''));
+            document.getElementById('toolNote').addEventListener('click', () => {
+                const note = prompt('输入笔记:');
+                if (note !== null) applyHighlight('green', note);
             });
 
-            const heights = mapped.map(i => i.height).filter(h => h > 0);
-            const avgHeight = heights.length ? heights.reduce((s, h) => s + h, 0) / heights.length : 12;
-            const tolerance = avgHeight * 0.5;
-
-            const rawLines = [];
-            let currentLine = [];
-            let currentTop = null;
-
-            for (const item of mapped) {
-                if (currentLine.length === 0) {
-                    currentLine.push(item);
-                    currentTop = item.top;
-                } else {
-                    if (Math.abs(item.top - currentTop) <= tolerance) {
-                        currentLine.push(item);
-                    } else {
-                        rawLines.push({ items: currentLine, top: currentTop });
-                        currentLine = [item];
-                        currentTop = item.top;
+            function handleTextSelection(e) {
+                setTimeout(() => {
+                    const sel = window.getSelection();
+                    if (!sel.rangeCount || sel.isCollapsed || !sel.toString().trim()) {
+                        toolbar.style.display = 'none';
+                        return;
                     }
-                }
+                    if (!cardBody.contains(sel.anchorNode)) {
+                        toolbar.style.display = 'none';
+                        return;
+                    }
+                    currentSelectionRange = sel.getRangeAt(0).cloneRange();
+                    const rect = sel.getRangeAt(0).getBoundingClientRect();
+                    toolbar.style.top = (rect.top - 50) + 'px';
+                    toolbar.style.left = Math.min(rect.left + rect.width/2, window.innerWidth - 150) + 'px';
+                    toolbar.style.display = 'flex';
+                }, 10);
             }
-            if (currentLine.length > 0) rawLines.push({ items: currentLine, top: currentTop });
-
-            // 每行内按x排序，拼接字符串
-            const lines = rawLines.map(line => {
-                line.items.sort((a, b) => a.x - b.x);
-                const text = line.items.map(it => it.str).join('');
-                const startX = line.items[0].x;
-                return { text, top: line.top, startX };
+            document.addEventListener('mousedown', (e) => {
+                if (!e.target.closest('.floating-toolbar')) toolbar.style.display = 'none';
             });
 
-            return { lines, avgHeight };
-        }
-
-        // 基于行间距与缩进分段
-        function segmentLines(lines, avgHeight) {
-            if (lines.length === 0) return [];
-            if (lines.length === 1) return [lines[0].text];
-
-            const startXs = lines.map(l => l.startX).sort((a, b) => a - b);
-            const medianStartX = startXs[Math.floor(startXs.length / 2)];
-            const indentThreshold = avgHeight * 2;   // 缩进阈值
-
-            const gaps = [];
-            for (let i = 0; i < lines.length - 1; i++) {
-                gaps.push(lines[i + 1].top - lines[i].top);
+            function applyHighlight(color, note) {
+                if (!currentSelectionRange || !cards[currentIndex]) return;
+                const offsets = getTextOffsets(currentSelectionRange, cards[currentIndex].text);
+                if (!offsets) return;
+                cards[currentIndex].highlights.push({
+                    start: offsets.start,
+                    end: offsets.end,
+                    color: color,
+                    note: note
+                });
+                toolbar.style.display = 'none';
+                window.getSelection().removeAllRanges();
+                renderCard();
+                saveProgress();
             }
-            const sortedGaps = [...gaps].sort((a, b) => a - b);
-            const medianGap = sortedGaps[Math.floor(sortedGaps.length / 2)];
-            const gapThreshold = medianGap * 1.8;
 
-            const paragraphs = [];
-            let currentPara = [lines[0].text];
+            function getTextOffsets(range, originalText) {
+                const startNode = range.startContainer;
+                const endNode = range.endContainer;
+                const startOffset = range.startOffset;
+                const endOffset = range.endOffset;
+                let textBefore = '';
+                const walker = document.createTreeWalker(cardBody, NodeFilter.SHOW_TEXT, null, false);
+                let node;
+                let foundStart = false;
+                let globalStart = 0, globalEnd = 0;
+                while (node = walker.nextNode()) {
+                    if (node === startNode) {
+                        globalStart = textBefore.length + startOffset;
+                        foundStart = true;
+                    }
+                    if (foundStart) {
+                        if (node === endNode) {
+                            globalEnd = textBefore.length + endOffset;
+                            break;
+                        }
+                    }
+                    textBefore += node.textContent;
+                }
+                if (globalEnd === 0) globalEnd = originalText.length;
+                return { start: globalStart, end: globalEnd };
+            }
 
-            for (let i = 0; i < gaps.length; i++) {
-                const nextLine = lines[i + 1];
-                const gap = gaps[i];
-                const gapBreak = gap > gapThreshold;
-                const indentBreak = (nextLine.startX - medianStartX) > indentThreshold;
+            // 笔记图标点击编辑
+            cardBody.addEventListener('click', (e) => {
+                const noteIcon = e.target.closest('.note-icon');
+                if (noteIcon) {
+                    e.stopPropagation();
+                    const idx = parseInt(noteIcon.dataset.highlightIndex);
+                    if (!isNaN(idx) && cards[currentIndex].highlights[idx]) {
+                        const oldNote = cards[currentIndex].highlights[idx].note;
+                        const newNote = prompt('编辑笔记', oldNote);
+                        if (newNote !== null) {
+                            cards[currentIndex].highlights[idx].note = newNote;
+                            renderCard();
+                            saveProgress();
+                        }
+                    }
+                }
+            });
 
-                if (gapBreak || indentBreak) {
-                    paragraphs.push(currentPara.join('\n'));
-                    currentPara = [nextLine.text];
-                } else {
-                    currentPara.push(nextLine.text);
+            // 翻页
+            prevCard.addEventListener('click', () => changeCard(-1));
+            nextCard.addEventListener('click', () => changeCard(1));
+            function changeCard(delta) {
+                const newIdx = currentIndex + delta;
+                if (newIdx >= 0 && newIdx < cards.length) {
+                    currentIndex = newIdx;
+                    renderCard();
+                    updateProgress();
                 }
             }
-            paragraphs.push(currentPara.join('\n'));
-            return paragraphs;
-        }
+            // 左右区域点击翻页
+            cardSingle.addEventListener('click', (e) => {
+                if (e.target.closest('.note-icon') || e.target.closest('mark')) return;
+                const rect = cardSingle.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                if (x < rect.width * 0.3) changeCard(-1);
+                else if (x > rect.width * 0.7) changeCard(1);
+            });
 
-        // 按空行二次切分
-        function splitByEmptyLines(text) {
-            return text.split(/\n\s*\n/).filter(s => s.trim() !== '');
-        }
-
-        // 渲染卡片
-        function renderCards(paragraphs) {
-            cardsContainer.innerHTML = '';
-            for (const p of paragraphs) {
-                const card = document.createElement('div');
-                card.className = 'card';
-
-                const label = document.createElement('span');
-                label.className = 'page-label';
-                label.textContent = `第 ${p.pageNumber} 页`;
-
-                const textDiv = document.createElement('div');
-                textDiv.className = 'text';
-                textDiv.textContent = p.text;
-
-                card.appendChild(label);
-                card.appendChild(textDiv);
-                cardsContainer.appendChild(card);
+            // 进度更新
+            function updateProgress() {
+                const total = cards.length;
+                const cur = Math.min(currentIndex + 1, total);
+                pageIndicator.textContent = `${cur} / ${total}`;
+                const pct = Math.round((cur / total) * 100);
+                progressFill.style.width = pct + '%';
+                progressPercent.textContent = pct + '%';
             }
-            applyFontSize(currentFontSize);
+            // 跳转
+            jumpIcon.addEventListener('click', () => {
+                jumpInput.style.display = 'inline-block';
+                jumpInput.value = currentIndex + 1;
+                jumpInput.focus();
+            });
+            jumpInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    let num = parseInt(jumpInput.value);
+                    if (num >= 1 && num <= cards.length) {
+                        currentIndex = num - 1;
+                        renderCard();
+                        updateProgress();
+                    }
+                    jumpInput.style.display = 'none';
+                }
+            });
+            jumpInput.addEventListener('blur', () => { jumpInput.style.display = 'none'; });
+
+            // 标签
+            function updateTagButtons(tag) {
+                tagBtns.forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.tag === tag) btn.classList.add('active');
+                });
+            }
+            tagBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (!cards[currentIndex]) return;
+                    const tag = btn.dataset.tag;
+                    cards[currentIndex].tag = cards[currentIndex].tag === tag ? null : tag;
+                    updateTagButtons(cards[currentIndex].tag);
+                    saveProgress();
+                });
+            });
+
+            // 浏览模式与搜索
+            function renderBrowseList() {
+                browseItems.innerHTML = '';
+                const keyword = searchKeyword.toLowerCase();
+                matchIndexes = [];
+                cards.forEach((card, idx) => {
+                    if (keyword && !card.text.toLowerCase().includes(keyword)) return;
+                    matchIndexes.push(idx);
+                    const div = document.createElement('div');
+                    div.className = 'browse-item';
+                    div.innerHTML = `
+                        <span class="source">${card.source || '段落'}</span>
+                        <span class="preview">${escapeHtml(card.text.slice(0, 80))}${card.text.length>80?'...':''}</span>
+                        <span class="tags">${card.tag ? getTagEmoji(card.tag) : ''}</span>
+                    `;
+                    div.addEventListener('click', () => {
+                        currentIndex = idx;
+                        showCardMode();
+                        renderCard();
+                    });
+                    browseItems.appendChild(div);
+                });
+                matchInfo.textContent = matchIndexes.length ? `找到 ${matchIndexes.length} 个段落` : '无结果';
+                currentMatchIdx = -1;
+            }
+            function getTagEmoji(tag) {
+                return {question:'❓', inspiration:'💡', quote:'📌'}[tag] || '';
+            }
+            searchInput.addEventListener('input', () => {
+                searchKeyword = searchInput.value.trim();
+                renderBrowseList();
+            });
+            clearSearch.addEventListener('click', () => { searchInput.value = ''; searchKeyword = ''; renderBrowseList(); });
+            prevMatch.addEventListener('click', () => {
+                if (!matchIndexes.length) return;
+                currentMatchIdx = (currentMatchIdx - 1 + matchIndexes.length) % matchIndexes.length;
+                document.querySelectorAll('.browse-item').forEach((el, i) => {
+                    el.style.background = i === currentMatchIdx ? 'var(--bg)' : 'var(--card-bg)';
+                });
+                document.querySelectorAll('.browse-item')[currentMatchIdx]?.scrollIntoView({ block: 'center' });
+            });
+            nextMatch.addEventListener('click', () => {
+                if (!matchIndexes.length) return;
+                currentMatchIdx = (currentMatchIdx + 1) % matchIndexes.length;
+                document.querySelectorAll('.browse-item').forEach((el, i) => {
+                    el.style.background = i === currentMatchIdx ? 'var(--bg)' : 'var(--card-bg)';
+                });
+                document.querySelectorAll('.browse-item')[currentMatchIdx]?.scrollIntoView({ block: 'center' });
+            });
+
+            // 标签面板
+            showTagsPanel.addEventListener('click', () => {
+                updateTagPanel('all');
+                tagPanelOverlay.style.display = 'flex';
+            });
+            closeTagPanel.addEventListener('click', () => tagPanelOverlay.style.display = 'none');
+            tagPanelOverlay.addEventListener('click', (e) => { if (e.target === tagPanelOverlay) tagPanelOverlay.style.display = 'none'; });
+            tagFilters.forEach(f => {
+                f.addEventListener('click', () => {
+                    tagFilters.forEach(tf => tf.classList.remove('active'));
+                    f.classList.add('active');
+                    updateTagPanel(f.dataset.filter);
+                });
+            });
+            function updateTagPanel(filter) {
+                tagPanelContent.innerHTML = '';
+                let items = [];
+                cards.forEach((card, idx) => {
+                    if (!card.tag) return;
+                    if (filter !== 'all' && card.tag !== filter) return;
+                    items.push({ idx, card });
+                });
+                if (!items.length) {
+                    tagPanelContent.innerHTML = '<p>暂无标记段落</p>';
+                    return;
+                }
+                items.forEach(({idx, card}) => {
+                    const div = document.createElement('div');
+                    div.className = 'panel-item';
+                    div.innerHTML = `
+                        <span style="font-weight:bold;">${getTagEmoji(card.tag)} ${card.source || '段落'}</span>
+                        <span style="font-size:0.9rem;">${escapeHtml(card.text.slice(0, 60))}...</span>
+                    `;
+                    div.addEventListener('click', () => {
+                        currentIndex = idx;
+                        showCardMode();
+                        renderCard();
+                        tagPanelOverlay.style.display = 'none';
+                    });
+                    tagPanelContent.appendChild(div);
+                });
+            }
+
+            // 导出Markdown
+            exportMD.addEventListener('click', () => {
+                let md = `# 阅读笔记：${currentFileName}\n\n`;
+                cards.forEach((card, idx) => {
+                    if (!card.highlights.length && !card.tag) return;
+                    let block = `## ${card.source || '段落'}\n\n`;
+                    if (card.tag) block += `**标签**: ${getTagEmoji(card.tag)}  \n`;
+                    if (card.highlights.length) {
+                        card.highlights.forEach(h => {
+                            block += `- 高亮： "${card.text.slice(h.start, h.end)}"`;
+                            if (h.note) block += ` — 📝 ${h.note}`;
+                            block += '\n';
+                        });
+                    }
+                    block += '\n';
+                    md += block;
+                });
+                downloadFile(currentFileName + '-笔记.md', md);
+            });
+
+            // 导入导出标记数据
+            exportData.addEventListener('click', () => {
+                const data = {
+                    fileName: currentFileName,
+                    cards: cards.map(c => ({ highlights: c.highlights, tag: c.tag })),
+                    currentIndex: currentIndex
+                };
+                downloadFile(currentFileName + '-标记.json', JSON.stringify(data, null, 2));
+            });
+            importDataBtn.addEventListener('click', () => importDataInput.click());
+            importDataInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        if (!data.cards || data.cards.length !== cards.length) {
+                            alert('标记数据与当前书籍不匹配');
+                            return;
+                        }
+                        for (let i=0; i<cards.length; i++) {
+                            cards[i].highlights = data.cards[i].highlights || [];
+                            cards[i].tag = data.cards[i].tag || null;
+                        }
+                        currentIndex = data.currentIndex || 0;
+                        renderCard();
+                        renderBrowseList();
+                        updateProgress();
+                        saveProgress();
+                        alert('标记数据已导入');
+                    } catch(e) { alert('文件格式错误'); }
+                };
+                reader.readAsText(file);
+            });
+
+            function downloadFile(filename, content) {
+                const blob = new Blob([content], {type: 'text/plain'});
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                a.click();
+            }
+
+            // 初始状态
+            document.addEventListener('keydown', (e) => {
+                if (!readerView.style.display || readerView.style.display === 'none') return;
+                if (e.key === 'ArrowLeft') changeCard(-1);
+                else if (e.key === 'ArrowRight') changeCard(1);
+            });
         }
     </script>
 </body>
